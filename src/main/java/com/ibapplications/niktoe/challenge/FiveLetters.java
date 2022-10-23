@@ -32,15 +32,19 @@ public class FiveLetters {
         try(Stream<String> fileStream = Files.lines(p).parallel()) {
             List<String> words = fileStream.filter(FiveLetters::removeDouble).toList();
             List<String> filtered = words.parallelStream().filter(word -> processMatched(word, words)).toList();
+            AtomicInteger i = new AtomicInteger();
             filtered.forEach(w -> {
+                System.out.println(MessageFormat.format("Creating toubles for word {0} out of {1}", i.incrementAndGet(), filtered.size()));
                 createWordTouples(w, compatibleMap.get(w));
             });
             processTouples();
             wordCount.set(0);
-            filtered.forEach(w -> {
+            Set<Set<String>> sets = getSets();
+            write(sets);
+            /*filtered.forEach(w -> {
                 System.out.println(MessageFormat.format("Handling word {0} out of {1}", wordCount.incrementAndGet(), filtered.size()));
                 handleWord(w);
-            });
+            });*/
         }
     }
 
@@ -79,10 +83,12 @@ public class FiveLetters {
 
     public static Set<Set<String>> getSets() {
         Set<Set<String>> allSets = new HashSet<>();
+        int i = 0;
         for(WordSet wordSet: wordTubles) {
+            System.out.println(MessageFormat.format("Looking at set {0} out of {1}", i++, wordTubles.size()));
             for(Map.Entry<WordSet, Set<String>> matched: wordSet.matchedSets.entrySet()) {
                 for(String last: matched.getValue()) {
-                    allSets.add(Set.of(wordSet.first, wordSet.seconds, matched.getKey().first, matched.getKey().seconds, last));
+                    allSets.add(Set.of(wordSet.first, wordSet.second, matched.getKey().first, matched.getKey().second, last));
                 }
             }
         }
@@ -138,7 +144,9 @@ public class FiveLetters {
 
     public record WordSet(
             String first,
-            String seconds,
+            String second,
+            int firstHash,
+            int secondHash,
             Set<String> matched,
             HashMap<WordSet, Set<String>> matchedSets
     ) {
@@ -147,7 +155,7 @@ public class FiveLetters {
             String actual2 = first.compareTo(second) > 0 ? second : first;
             Set<String> intersection = new HashSet<>(firstMatched);
             intersection.retainAll(secondMatched);
-            return new WordSet(actual1, actual2, intersection, new HashMap<>());
+            return new WordSet(actual1, actual2, actual1.hashCode(), actual2.hashCode(), intersection, new HashMap<>());
         }
 
         public boolean hasIntersection() {
@@ -155,12 +163,14 @@ public class FiveLetters {
         }
 
         public void checkOther(WordSet wordSet) {
-            if(!this.equals(wordSet) && !matchedSets.containsKey(wordSet)) {
-                Set<String> intersection = new HashSet<>(matched);
-                intersection.retainAll(wordSet.matched);
-                if(!intersection.isEmpty()) {
-                    matchedSets.put(wordSet, intersection);
-                    wordSet.matchedSets.put(this, intersection);
+            if(firstHash != wordSet.firstHash && firstHash != wordSet.secondHash && secondHash != wordSet.firstHash && secondHash != wordSet.secondHash) {
+                if(!this.equals(wordSet) && !matchedSets.containsKey(wordSet)) {
+                    Set<String> intersection = new HashSet<>(matched);
+                    intersection.retainAll(wordSet.matched);
+                    if(!intersection.isEmpty()) {
+                        matchedSets.put(wordSet, intersection);
+                        wordSet.matchedSets.put(this, intersection);
+                    }
                 }
             }
         }
@@ -170,12 +180,12 @@ public class FiveLetters {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             WordSet wordSet = (WordSet) o;
-            return first.equals(wordSet.first) && seconds.equals(wordSet.seconds);
+            return first.equals(wordSet.first) && second.equals(wordSet.second);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(first, seconds);
+            return Objects.hash(first, second);
         }
     }
 
