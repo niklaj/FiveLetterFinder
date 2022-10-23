@@ -21,6 +21,7 @@ public class FiveLetters {
     public static final Path outPath = Paths.get("output.txt");
 
     public static final Map<String, Set<String>> compatibleMap = new HashMap<>();
+    public static final Set<WordSet> wordTubles = new HashSet<>();
 
     public static void main(String[] args) throws IOException {
         if(Files.exists(outPath)) {
@@ -30,7 +31,11 @@ public class FiveLetters {
         Path p = Paths.get("words_alpha.txt");
         try(Stream<String> fileStream = Files.lines(p).parallel()) {
             List<String> words = fileStream.filter(FiveLetters::removeDouble).toList();
-            List<String> filtered = words.parallelStream().filter(word -> preprocessWords(word, words)).toList();
+            List<String> filtered = words.parallelStream().filter(word -> processMatched(word, words)).toList();
+            filtered.forEach(w -> {
+                createWordTouples(w, compatibleMap.get(w));
+            });
+            processTouples();
             wordCount.set(0);
             filtered.forEach(w -> {
                 System.out.println(MessageFormat.format("Handling word {0} out of {1}", wordCount.incrementAndGet(), filtered.size()));
@@ -43,8 +48,8 @@ public class FiveLetters {
         return word.length() == 5 && word.chars().distinct().count() == 5;
     }
 
-    private static boolean preprocessWords(String word, List<String> allWords) {
-        System.out.println(MessageFormat.format("Preprocessing word {0} out of {1}", wordCount.incrementAndGet(), allWords.size()));
+    private static boolean processMatched(String word, List<String> allWords) {
+        System.out.println(MessageFormat.format("Matching for words of {0} out of {1}", wordCount.incrementAndGet(), allWords.size()));
         List<String> compatible = allWords.parallelStream()
                 .filter(l -> word.chars().allMatch(c -> l.indexOf(c) == -1))
                 .toList();
@@ -53,6 +58,35 @@ public class FiveLetters {
             return true;
         }
         return false;
+    }
+
+    private static void createWordTouples(String word, Set<String> matched) {
+        List<WordSet> wordSets = matched.stream()
+                .map(m -> WordSet.create(word, m, matched, compatibleMap.get(m)))
+                .filter(WordSet::hasIntersection)
+                .toList();
+        wordTubles.addAll(wordSets);
+
+    }
+
+    private static void processTouples() {
+        for(WordSet wordSet: wordTubles) {
+            for(WordSet wordSetInner: wordTubles) {
+                wordSet.checkOther(wordSetInner);
+            }
+        }
+    }
+
+    public static Set<Set<String>> getSets() {
+        Set<Set<String>> allSets = new HashSet<>();
+        for(WordSet wordSet: wordTubles) {
+            for(Map.Entry<WordSet, Set<String>> matched: wordSet.matchedSets.entrySet()) {
+                for(String last: matched.getValue()) {
+                    allSets.add(Set.of(wordSet.first, wordSet.seconds, matched.getKey().first, matched.getKey().seconds, last));
+                }
+            }
+        }
+        return allSets;
     }
 
     private static void handleWord(String word) {
@@ -99,6 +133,49 @@ public class FiveLetters {
 
         for(Set<String> group: groups) {
             Files.writeString(outPath, String.join("\t", group) + "\n", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        }
+    }
+
+    public record WordSet(
+            String first,
+            String seconds,
+            Set<String> matched,
+            HashMap<WordSet, Set<String>> matchedSets
+    ) {
+        public static WordSet create(String first, String second, Set<String> firstMatched, Set<String> secondMatched) {
+            String actual1 = first.compareTo(second) > 0 ? first : second;
+            String actual2 = first.compareTo(second) > 0 ? second : first;
+            Set<String> intersection = new HashSet<>(firstMatched);
+            intersection.retainAll(secondMatched);
+            return new WordSet(actual1, actual2, intersection, new HashMap<>());
+        }
+
+        public boolean hasIntersection() {
+            return !matched.isEmpty();
+        }
+
+        public void checkOther(WordSet wordSet) {
+            if(!this.equals(wordSet) && !matchedSets.containsKey(wordSet)) {
+                Set<String> intersection = new HashSet<>(matched);
+                intersection.retainAll(wordSet.matched);
+                if(!intersection.isEmpty()) {
+                    matchedSets.put(wordSet, intersection);
+                    wordSet.matchedSets.put(this, intersection);
+                }
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            WordSet wordSet = (WordSet) o;
+            return first.equals(wordSet.first) && seconds.equals(wordSet.seconds);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(first, seconds);
         }
     }
 
