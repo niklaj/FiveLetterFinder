@@ -9,6 +9,7 @@ import java.nio.file.StandardOpenOption;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class FiveLetters {
@@ -31,7 +32,10 @@ public class FiveLetters {
             List<String> words = fileStream.filter(FiveLetters::removeDouble).toList();
             List<String> filtered = words.parallelStream().filter(word -> preprocessWords(word, words)).toList();
             wordCount.set(0);
-            filtered.forEach(FiveLetters::handleWord);
+            filtered.forEach(w -> {
+                System.out.println(MessageFormat.format("Handling word {0} out of {1}", wordCount.incrementAndGet(), filtered.size()));
+                handleWord(w);
+            });
         }
     }
 
@@ -52,17 +56,22 @@ public class FiveLetters {
     }
 
     private static void handleWord(String word) {
-        System.out.println(MessageFormat.format("Handling word {0}", wordCount.incrementAndGet()));
         try {
             Set<String> allPossible = compatibleMap.get(word);
             if(allPossible != null) {
                 allPossible.removeAll(handled);
-                List<String> possible = allPossible.stream()
-                        .filter(w -> handleWord(w, allPossible))
-                        .toList();
+                int i = 0;
+                Set<Set<String>> allResults = new HashSet<>();
+                for(String subWord : allPossible) {
+                    //System.out.println(MessageFormat.format("Handling subword {0} out of {1}", i++, allPossible.size()));
+                    allResults.addAll(findSubsets(subWord, allPossible, 0));
+                }
+                /*Set<Set<String>> sets = allPossible.stream()
+                        .flatMap(w -> findSubsets(w, allPossible, 0).stream())
+                        .collect(Collectors.toSet());*/
 
-                if (possible.size() >= 4) {
-                    write(word, possible);
+                if(!allResults.isEmpty()) {
+                    write(allResults);
                 }
             }
         } catch (IOException e) {
@@ -70,35 +79,27 @@ public class FiveLetters {
         }
     }
 
-    private static boolean handleWord(String word, Set<String> words) {
-        return compatibleMap.containsKey(word) && compatibleMap.get(word).stream().filter(words::contains).count() > 2;
+    private static Set<Set<String>> findSubsets(String word, Set<String> words, int index) {
+        //System.out.println("Search level " + index);
+        if(!compatibleMap.containsKey(word)) {
+            return Set.of();
+        }
+        if(index == 4) {
+            System.out.println("Found a set");
+            return Set.of(new HashSet<>(Set.of(word)));
+        }
+        Set<String> compatible = compatibleMap.get(word).stream().filter(words::contains).collect(Collectors.toSet());
+
+        Set<Set<String>> compatibleSets = compatible.stream().flatMap(s -> findSubsets(s, compatible, index+1).stream()).collect(Collectors.toSet());
+        compatibleSets.forEach(s -> s.add(word));
+        return compatibleSets;
     }
 
+    private static synchronized void write(Set<Set<String>> groups) throws IOException {
 
-    private static synchronized void write(String main, List<String> words) throws IOException {
-
-        Set<Set<String>> subSets = getSubsets(words, 4);
-        for(int i = 0; i+4 < subSets.size();i++) {
-            List<String> toWrite = new ArrayList<>();
-            toWrite.add(main);
-            toWrite.addAll(words.subList(i, i+4));
-            Files.writeString(outPath, main + "\t" +  String.join("\t", toWrite) + "\n", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
+        for(Set<String> group: groups) {
+            Files.writeString(outPath, String.join("\t", group) + "\n", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         }
-    }
-
-    public static Set<Set<String>> getSubsets(Collection<String> initial, int size) {
-        if(initial.size() == size) {
-            return Set.of(new HashSet<>(initial));
-        }
-        return initial.stream().map(item -> {
-                    Set<String> clone = new HashSet<>(initial);
-                    clone.remove(item);
-                    return clone;
-                }).map(group -> getSubsets(group, size))
-                .reduce(new HashSet<>(), (x, y) -> {
-                    x.addAll(y);
-                    return x;
-                });
     }
 
 }
