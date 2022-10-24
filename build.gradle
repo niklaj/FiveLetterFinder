@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id "application"
 }
 
 group 'org.example'
@@ -7,6 +8,14 @@ version '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+}
+
+ext {
+    javaMainClass = "com.ibapplications.niktoe.challenge.FiveLetters6"
+}
+
+application {
+    mainClassName = javaMainClass
 }
 
 tasks.withType(JavaCompile) {
