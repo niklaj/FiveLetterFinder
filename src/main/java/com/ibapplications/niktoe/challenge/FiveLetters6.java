@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.text.MessageFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -44,15 +46,40 @@ public class FiveLetters6 {
     private static void handle(List<String> words) throws IOException {
         Set<Integer>[] neighbours = createNeighboursNew(words);
         List<Set<String>> results = new ArrayList<>();
-        for(int i = 0; i < 3000;i++) {
-            int deepth = 0;
-            int checks = 0;
-        //for(int i = 0; i < neighbours.length;i++) {
+        for(int i = 0; i < neighbours.length;i++) {
+            AtomicInteger deepth = new AtomicInteger();
+            AtomicInteger checks = new AtomicInteger();
+            Instant start = Instant.now();
             //System.out.println(MessageFormat.format("Handling word {0} of {1}", i, neighbours.length));
             Set<Integer> ni = new HashSet<>(neighbours[i]);
             System.out.println(MessageFormat.format("Handling word {0} of {1} searching through {2} options ({3})", i, neighbours.length, ni.size(), Runtime.getRuntime().freeMemory()/1024/1024));
-            int index = 0;
-            for(Integer j : ni) {
+            int index = i;
+            ni.parallelStream().forEach(j -> {
+                //System.out.println(MessageFormat.format("Looping word {0} of {1}", index++, ni.size()));
+                if(index > j) return;
+                Set<Integer> nij = new HashSet<>(neighbours[j]);
+                nij.retainAll(ni);
+                for(Integer k: nij) {
+                    if(j > k) continue;
+                    checks.incrementAndGet();
+                    deepth.getAndUpdate(v -> Math.max(v, 2));
+                    Set<Integer> nijk = new HashSet<>(neighbours[k]);
+                    nijk.retainAll(nij);
+                    for(Integer l: nijk) {
+                        if(k > l) continue;
+                        checks.incrementAndGet();
+                        deepth.getAndUpdate(v -> Math.max(v, 3));
+                        Set<Integer> nijkl = new HashSet<>(neighbours[l]);
+                        nijkl.retainAll(nijk);
+                        for(Integer r: nijkl) {
+                            checks.incrementAndGet();
+                            deepth.getAndUpdate(v -> Math.max(v, 4));
+                            results.add(Set.of(words.get(index), words.get(j), words.get(k), words.get(l), words.get(r)));
+                        }
+                    }
+                }
+            });
+            /*for(Integer j : ni) {
                 //System.out.println(MessageFormat.format("Looping word {0} of {1}", index++, ni.size()));
                 if(i > j) continue;
                 Set<Integer> nij = new HashSet<>(neighbours[j]);
@@ -76,8 +103,8 @@ public class FiveLetters6 {
                         }
                     }
                 }
-            }
-            System.out.println("Reached deepth: " + deepth + " with checks: " + checks);
+            }*/
+            System.out.println("Reached deepth: " + deepth + " with checks: " + checks + " in " + Duration.between(start, Instant.now()));
         }
         write(results);
     }
