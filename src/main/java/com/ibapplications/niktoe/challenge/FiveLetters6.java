@@ -22,10 +22,9 @@ public class FiveLetters6 {
 
     public static final AtomicInteger wordCount = new AtomicInteger();
 
-    public static final long heapMaxSize = Runtime.getRuntime().maxMemory();
 
     public static void main(String[] args) throws IOException {
-        System.out.println("Available memory(MB): " + heapMaxSize/1024/1026);
+        System.out.println("Available memory(MB): " + Runtime.getRuntime().maxMemory()/1024/1026);
         if(Files.exists(outPath)) {
             Files.delete(outPath);
         }
@@ -52,7 +51,6 @@ public class FiveLetters6 {
             AtomicInteger deepth = new AtomicInteger();
             AtomicInteger checks = new AtomicInteger();
             Instant start = Instant.now();
-            //System.out.println(MessageFormat.format("Handling word {0} of {1}", i, neighbours.length));
             Set<Integer> ni = new HashSet<>(neighbours[i]);
             System.out.println(MessageFormat.format("Handling word {0} of {1} searching through {2} options ({3})", i, neighbours.length, ni.size(), Runtime.getRuntime().freeMemory()/1024/1024));
             int index = i;
@@ -86,14 +84,6 @@ public class FiveLetters6 {
         System.out.printf("Total execution time %s", Duration.between(methodStart, Instant.now()));
     }
 
-    private static void handleOld(List<String> words) {
-        createNeighboursOld(words);
-        for(String word: words) {
-            analyseWord(word);
-        }
-        System.out.println("Complete");
-    }
-
     private static Set<Integer>[] createNeighbours(List<String> words) {
         Set<Integer>[] neighbours = new Set[words.size()];
         for(int i = 0; i < words.size(); i++) {
@@ -111,47 +101,11 @@ public class FiveLetters6 {
         return neighbours;
     }
 
-    private static void createNeighboursOld(List<String> words) {
-        for(String word: words) {
-            Set<String> localNeighbours = new HashSet<>();
-            Set<Integer> letters = word.chars().boxed().collect(Collectors.toSet());
-            for(String toCheck: words) {
-                int checksum = toCheck.chars().filter(letters::contains).sum();
-                if(checksum == 0) {
-                    localNeighbours.add(toCheck);
-                }
-            }
-            neighbours.put(word, localNeighbours);
-        }
-    }
-
-    private static void analyseWord(String word) {
-        System.out.println(MessageFormat.format("Handling word {0}", wordCount.incrementAndGet()));
-        Set<Set<String>> result = new HashSet<>();
-        Set<String> localNeighbours = neighbours.get(word);
-        int i = 0;
-        for(String j: localNeighbours) {
-            System.out.println(MessageFormat.format("Looping word {0} of {1}", i++, localNeighbours.size()));
-            Set<String> nij = new HashSet<>(neighbours.get(j));
-            nij.retainAll(localNeighbours);
-            for(String k: nij) {
-                Set<String> nijk = new HashSet<>(neighbours.get(k));
-                nijk.retainAll(nij);
-                for(String l: nijk) {
-                    Set<String> nijkl = new HashSet<>(neighbours.get(l));
-                    nijkl.retainAll(nijk);
-                    for(String r: nijkl) {
-                        result.add(Set.of(word, j, k, l, r));
-                    }
-                }
-            }
-        }
-    }
-
     private static synchronized void write(List<Set<String>> groups) throws IOException {
-
+        Instant start = Instant.now();
         for(Set<String> group: groups) {
             Files.writeString(outPath, String.join("\t", group) + "\n", StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         }
+        System.out.printf("Completed write in %s", Duration.between(start, Instant.now()));
     }
 }
