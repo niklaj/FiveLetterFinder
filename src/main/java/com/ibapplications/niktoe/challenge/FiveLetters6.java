@@ -45,7 +45,7 @@ public class FiveLetters6 {
 
     private static void handle(List<String> words) throws IOException {
         Instant methodStart = Instant.now();
-        Set<Integer>[] neighbours = createNeighboursNew(words);
+        Set<Integer>[] neighbours = createNeighbours(words);
         List<Set<String>> results = new ArrayList<>();
         for(int i = 0; i < neighbours.length;i++) {
         //for(int i = 0; i < 200;i++) {
@@ -59,25 +59,19 @@ public class FiveLetters6 {
             ni.parallelStream().forEach(j -> {
                 //System.out.println(MessageFormat.format("Looping word {0} of {1}", index++, ni.size()));
                 if(index > j) return;
-                Set<Integer> nij = new HashSet<>(ni);
-                nij.retainAll(neighbours[j]);
-                Set<Integer> nijk = new HashSet<>();
-                Set<Integer> nijkl = new HashSet<>();
+                Set<Integer> nij = ni.stream().filter(neighbours[j]::contains).collect(Collectors.toSet());
                 for(Integer k: nij) {
                     if(j > k) continue;
                     checks.incrementAndGet();
                     deepth.getAndUpdate(v -> Math.max(v, 2));
-                    nijk.clear();
-                    nijk.addAll(nij);
-                    nijk.retainAll(neighbours[k]);
+                    Set<Integer> nijk = nij.stream().filter(neighbours[k]::contains).collect(Collectors.toSet());
                     for(Integer l: nijk) {
                         if(k > l) continue;
                         checks.incrementAndGet();
                         deepth.getAndUpdate(v -> Math.max(v, 3));
-                        nijkl.clear();
-                        nijkl.addAll(nijk);
-                        nijkl.retainAll(neighbours[l]);
+                        Set<Integer> nijkl = nijk.stream().filter(neighbours[l]::contains).collect(Collectors.toSet());
                         for(Integer r: nijkl) {
+                            if(l > r) continue;
                             checks.incrementAndGet();
                             deepth.getAndUpdate(v -> Math.max(v, 4));
                             results.add(Set.of(words.get(index), words.get(j), words.get(k), words.get(l), words.get(r)));
@@ -93,14 +87,14 @@ public class FiveLetters6 {
     }
 
     private static void handleOld(List<String> words) {
-        createNeighbours(words);
+        createNeighboursOld(words);
         for(String word: words) {
             analyseWord(word);
         }
         System.out.println("Complete");
     }
 
-    private static Set<Integer>[] createNeighboursNew(List<String> words) {
+    private static Set<Integer>[] createNeighbours(List<String> words) {
         Set<Integer>[] neighbours = new Set[words.size()];
         for(int i = 0; i < words.size(); i++) {
             Set<Integer> localNeighBours = new HashSet<>();
@@ -117,7 +111,7 @@ public class FiveLetters6 {
         return neighbours;
     }
 
-    private static void createNeighbours(List<String> words) {
+    private static void createNeighboursOld(List<String> words) {
         for(String word: words) {
             Set<String> localNeighbours = new HashSet<>();
             Set<Integer> letters = word.chars().boxed().collect(Collectors.toSet());
